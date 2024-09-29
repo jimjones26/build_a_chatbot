@@ -2,10 +2,13 @@
 # Imports
 # ------------------------------------------------------------------
 from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langgraph.graph import add_messages
+from typing import Sequence
+from typing_extensions import Annotated, TypedDict
 
 # ------------------------------------------------------------------
 # Create model
@@ -104,4 +107,58 @@ query = "What is my name?"
 
 input_messages = [HumanMessage(query)]
 output = app.invoke({"messages": input_messages}, config)
+output["messages"][-1].pretty_print()
+
+# ------------------------------------------------------------------
+# Make prompt template a bit more complicated
+# ------------------------------------------------------------------
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a helpful assistant. Answer all questions to the best of your ability in {language}.",
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ]
+)
+
+
+class State(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    language: str
+
+
+workflow = StateGraph(state_schema=State)
+
+
+def call_model(state: State):
+    chain = prompt | model
+    response = chain.invoke(state)
+    return {"messages": [response]}
+
+
+workflow.add_edge(START, "model")
+workflow.add_node("model", call_model)
+
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
+
+config = {"configurable": {"thread_id": "abc456"}}
+query = "Hi! I'm Jimmy."
+language = "Spanish"
+
+input_messages = [HumanMessage(query)]
+output = app.invoke(
+    {"messages": input_messages, "language": language},
+    config,
+)
+output["messages"][-1].pretty_print()
+
+query = "What is my name?"
+
+input_messages = [HumanMessage(query)]
+output = app.invoke(
+    {"messages": input_messages, "language": language},
+    config,
+)
 output["messages"][-1].pretty_print()
