@@ -5,6 +5,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # ------------------------------------------------------------------
 # Create model
@@ -41,7 +42,7 @@ workflow = StateGraph(state_schema=MessagesState)
 
 
 # Define the function that calls the model
-async def call_model(state: MessagesState):
+def call_model(state: MessagesState):
     response = model.invoke(state["messages"])
     return {"messages": response}
 
@@ -60,5 +61,47 @@ config = {"configurable": {"thread_id": "abc123"}}
 query = "Hello, my name is liberaci."
 
 input_messages = [HumanMessage(query)]
-output = await app.invoke({"messages": input_messages}, config)
+output = app.invoke({"messages": input_messages}, config)
+output["messages"][-1].pretty_print()
+
+# ------------------------------------------------------------------
+# Prompt templates
+# ------------------------------------------------------------------
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You talk like a pirate. Answer all questions to the best of your ability.",
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ]
+)
+
+workflow = StateGraph(state_schema=MessagesState)
+
+
+def call_model(state: MessagesState):
+    chain = prompt | model
+    response = chain.invoke(state)
+    return {"messages": response}
+
+
+workflow.add_edge(START, "model")
+workflow.add_node("model", call_model)
+
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
+
+config = {"configurable": {"thread_id": "abc345"}}
+query = "Yo! I'm Sebastian."
+
+input_messages = [HumanMessage(query)]
+output = app.invoke({"messages": input_messages}, config)
+output["messages"][-1].pretty_print()
+
+
+query = "What is my name?"
+
+input_messages = [HumanMessage(query)]
+output = app.invoke({"messages": input_messages}, config)
 output["messages"][-1].pretty_print()
