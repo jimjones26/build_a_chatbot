@@ -1,2 +1,4 @@
 ipykernel
 python-dotenv
+langchain-core
+langgraph
