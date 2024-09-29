@@ -236,3 +236,18 @@ output = app.invoke(
     config,
 )
 output["messages"][-1].pretty_print()
+
+config = {"configurable": {"thread_id": "abc789"}}
+query = (
+    "Hi I'm Todd, please tell me a joke about a bear who like to eat a lot of cherries."
+)
+language = "English"
+
+input_messages = [HumanMessage(query)]
+for chunk, metadata in app.stream(
+    {"messages": input_messages, "language": language},
+    config,
+    stream_mode="messages",
+):
+    if isinstance(chunk, AIMessage):  # Filter to just model responses
+        print(chunk.content, end="|")
